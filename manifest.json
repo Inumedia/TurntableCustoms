@@ -1,0 +1,20 @@
+{
+   "content_scripts": [ {
+      "css": [ "css/customavi.css" ],
+      "exclude_globs": [ "http://turntable.fm/", "http://turntable.fm/lobby", "http://turntable.fm/about", "http://turntable.fm/jobs", "http://turntable.fm/privacy", "http://turntable.fm/copyright", "http://turntable.fm/terms", "http://turntable.fm/static/*" ],
+      "js": [ "js/inject.js", "js/jquery.min.js" ],
+      "matches": [ "http://turntable.fm/*" ],
+      "run_at": "document_idle"
+   } ],
+   "description": "TurntableCustoms.com, Custom Avatars, Spotlights, Laptops, Hearts and more for Turntable.fm (made by Dingo, Inumedia, & Axe)",
+   "icons": {
+      "128": "images/icon128.png",
+      "16": "images/icon16.png",
+      "48": "images/icon48.png"
+   },
+   "manifest_version": 2,
+   "name": "Turntable Customs",
+   "permissions": [ "http://turntable.fm/" ],
+   "version": "2.6.0.0",
+   "web_accessible_resources": [ "js/customavatars.js", "js/inject.js", "js/jquery.min.js", "js/reset.js", "js/script.js", "js/underscore.js", "css/customavi.css" ]
+}

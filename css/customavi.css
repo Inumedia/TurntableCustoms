@@ -1,0 +1,18 @@
+#avatardiv{
+	width:35px;
+	height:35px;
+	overflow:hidden;
+	border: 3px solid white;
+	display:block;
+}
+#avatardiv:hover{
+	padding:0;
+	margin:0 3px 0 0;
+	border: 3px solid #D9A32A;
+}
+#avatardiv img:hover{
+	border:0px!important;
+}
+#avatardiv img{
+	border:0px!important;
+}
