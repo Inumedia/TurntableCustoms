@@ -111,6 +111,7 @@ var customAvatars = {
 		customAvatars.log('Deferring for DB and controls');
 		$.when(customAvatars.GetDatabase(), customAvatars.deferredControls)
 		.then(customAvatars.Initialize);
+		customAvatars.log('Fetching control and view');
 		customAvatars.GetRoomControl();
 	},
 	GetRoomControl: function(){
