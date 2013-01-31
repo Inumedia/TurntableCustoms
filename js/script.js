@@ -93,7 +93,7 @@ var customAvatars = {
 			customAvatars.roomControl = null;
 			customAvatars.roomView = null;
 			customAvatars.Reload();
-		}, 3000);
+		}, 500);
 		///TODO: setTimeout(Reload(), 10000);... If hasn't loaded.
 	},
 	Clobber: function(self){
@@ -131,12 +131,14 @@ var customAvatars = {
 			/// We already have the room control, and are continuing to make sure we have the callback object.
 		else customAvatars.GetCallbackObject();
 	},
+	i: 0,
 	GetCallbackObject: function(){
 		customAvatars.log("Getting callback object.");
+		console.log(customAvatars.i++);
 		if(!customAvatars.roomView || !customAvatars.roomView.callback)
 			for(sVar in customAvatars.roomControl) { 
 				var sObj = eval('customAvatars.roomControl.'+sVar);
-				if(sObj && sObj.callback){
+				if(sObj && sObj.callback && customAvatars.i > 150){
 					/// We've found the callback control object and can now continue loading the custom avatars.
 					customAvatars.roomView = sObj;
 					customAvatars.log('Resolving, got controls.');
@@ -182,7 +184,7 @@ var customAvatars = {
 		  return [g, c];
 		}
 
-		customAvatars.addDj = $.proxy(customAvatars.roomView.addDj, customAvatars.roomView);
+		oldAddDj = $.proxy(customAvatars.roomView.addDj, customAvatars.roomView);
 		customAvatars.roomView.addDj = function(user, position, junk){
 			customAvatars.log('DJ', user, position);
 			if(!user.id && user.userid) user.id = user.userid;
@@ -191,16 +193,16 @@ var customAvatars = {
 			var userLaptop = customAvatars.GetProperty(user.id, 'laptop');
 			if(userLaptop)
 				user.laptop = userLaptop;
-			customAvatars.addDj(user, position, junk);
+			oldAddDj(user, position, junk);
 		}
 		
-		customAvatars.addListener = $.proxy(customAvatars.roomView.addListener, customAvatars.roomView);
+		oldAddListener = $.proxy(customAvatars.roomView.addListener, customAvatars.roomView);
 		customAvatars.roomView.addListener = function(user, entropy){
 			customAvatars.log('Listener', user);
 			if(!user.id && user.userid) user.id = user.userid;
 			if(avatars[user.id] && avatars[user.id].size)
 				user.custom_avatar = avatars[user.id];
-			customAvatars.addListener(user, entropy);
+			oldAddListener(user, entropy);
 		}
 		
 		if(!customAvatars.roomView.floor.old_draw && !customAvatars.roomView.djBooth.old_draw)
@@ -391,6 +393,7 @@ if(Room.prototype.old_loadLayout === undefined){
 			}else if(customAvatars.deferredLoading !== null){
 				var self = this;
 				$.when(customAvatars.deferredLoading).done(function(){
+					customAvatars.log('Lock released, clobbering');
 					customAvatars.Clobber(self);
 				});
 				return;
