@@ -5,6 +5,7 @@ var customAvatars = {
 	isTC: false,
 	doneLoading: true,
 	deferredLoading: null,
+	DOMwaitingForLock: false,
 	gotDatabase: false,
 	doneLoadingDatabase: true,
 	errorLoadingDatabase: false,
@@ -93,7 +94,7 @@ var customAvatars = {
 			customAvatars.roomControl = null;
 			customAvatars.roomView = null;
 			customAvatars.Reload();
-		}, 500);
+		}, 3000);
 		///TODO: setTimeout(Reload(), 10000);... If hasn't loaded.
 	},
 	Clobber: function(self){
@@ -114,6 +115,15 @@ var customAvatars = {
 	},
 	GetRoomControl: function(){
 		customAvatars.doneLoading = false;
+		if(customAvatars.DOMwaitingForLock === true)
+		{
+			customAvatars.log('Detected waiting, unlocking and resolving.');
+			var deferredLock = customAvatars.deferredLoading;
+			customAvatars.deferredLoading = null;
+			customAvatars.doneLoading = true;
+			deferredLock.resolve();
+			return;
+		}
 		customAvatars.log("Getting Room Control");
 		if(!customAvatars.roomControl) 
 			for(sVar in turntable) {
@@ -131,14 +141,21 @@ var customAvatars = {
 			/// We already have the room control, and are continuing to make sure we have the callback object.
 		else customAvatars.GetCallbackObject();
 	},
-	i: 0,
 	GetCallbackObject: function(){
+		if(customAvatars.DOMwaitingForLock === true)
+		{
+			customAvatars.log('Detected waiting, unlocking and resolving.');
+			var deferredLock = customAvatars.deferredLoading;
+			customAvatars.deferredLoading = null;
+			customAvatars.doneLoading = true;
+			deferredLock.resolve();
+			return;
+		}
 		customAvatars.log("Getting callback object.");
-		console.log(customAvatars.i++);
 		if(!customAvatars.roomView || !customAvatars.roomView.callback)
 			for(sVar in customAvatars.roomControl) { 
 				var sObj = eval('customAvatars.roomControl.'+sVar);
-				if(sObj && sObj.callback && customAvatars.i > 150){
+				if(sObj && sObj.callback){
 					/// We've found the callback control object and can now continue loading the custom avatars.
 					customAvatars.roomView = sObj;
 					customAvatars.log('Resolving, got controls.');
@@ -184,7 +201,7 @@ var customAvatars = {
 		  return [g, c];
 		}
 
-		oldAddDj = $.proxy(customAvatars.roomView.addDj, customAvatars.roomView);
+		var oldAddDj = $.proxy(customAvatars.roomView.addDj, customAvatars.roomView);
 		customAvatars.roomView.addDj = function(user, position, junk){
 			customAvatars.log('DJ', user, position);
 			if(!user.id && user.userid) user.id = user.userid;
@@ -196,7 +213,7 @@ var customAvatars = {
 			oldAddDj(user, position, junk);
 		}
 		
-		oldAddListener = $.proxy(customAvatars.roomView.addListener, customAvatars.roomView);
+		var oldAddListener = $.proxy(customAvatars.roomView.addListener, customAvatars.roomView);
 		customAvatars.roomView.addListener = function(user, entropy){
 			customAvatars.log('Listener', user);
 			if(!user.id && user.userid) user.id = user.userid;
@@ -391,8 +408,10 @@ if(Room.prototype.old_loadLayout === undefined){
 					customAvatars.log('Cancelling bootstrap', customAvatars.bootStrapped);
 				}
 			}else if(customAvatars.deferredLoading !== null){
+				customAvatars.DOMwaitingForLock = true;
 				var self = this;
 				$.when(customAvatars.deferredLoading).done(function(){
+					customAvatars.DOMwaitingForLock = false;
 					customAvatars.log('Lock released, clobbering');
 					customAvatars.Clobber(self);
 				});
