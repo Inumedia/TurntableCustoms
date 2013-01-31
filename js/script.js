@@ -23,7 +23,7 @@ var customAvatars = {
 			return pId;
 	}),
 	log: function(){
-		console.log(arguments);
+		console.log.apply(console, arguments);
 	},
 	GetProperty: function(userId, propertyName){
 		if(customAvatars.additionalProperties[userId] && customAvatars.additionalProperties[userId][propertyName])
@@ -184,8 +184,9 @@ var customAvatars = {
 
 		customAvatars.addDj = $.proxy(customAvatars.roomView.addDj, customAvatars.roomView);
 		customAvatars.roomView.addDj = function(user, position, junk){
+			customAvatars.log('DJ', user, position);
 			if(!user.id && user.userid) user.id = user.userid;
-			if(avatars[user.id])
+			if(avatars[user.id] && avatars[user.id].size)
 				user.custom_avatar = avatars[user.id];
 			var userLaptop = customAvatars.GetProperty(user.id, 'laptop');
 			if(userLaptop)
@@ -195,15 +196,15 @@ var customAvatars = {
 		
 		customAvatars.addListener = $.proxy(customAvatars.roomView.addListener, customAvatars.roomView);
 		customAvatars.roomView.addListener = function(user, entropy){
+			customAvatars.log('Listener', user);
 			if(!user.id && user.userid) user.id = user.userid;
-			if(avatars[user.id])
+			if(avatars[user.id] && avatars[user.id].size)
 				user.custom_avatar = avatars[user.id];
 			customAvatars.addListener(user, entropy);
 		}
 		
 		if(!customAvatars.roomView.floor.old_draw && !customAvatars.roomView.djBooth.old_draw)
 			customAvatars.roomView.floor.old_draw = customAvatars.roomView.djBooth.old_draw = customAvatars.roomView.djBooth.draw;
-
 		customAvatars.roomView.djBooth.draw = customAvatars.roomView.floor.draw = function(a,b,c,d,e){
 			if(c)
 				for(var i = 0; i < c.length; ++i)
@@ -310,6 +311,7 @@ var customAvatars = {
 		if(customAvatars.buttonsAdded === false) customAvatars.AddButtons();
 		customAvatars.ReplaceAllUsers();
 		
+		customAvatars.log('Unlocking and resolving');
 		var deferredLock = customAvatars.deferredLoading;
 		customAvatars.deferredLoading = null;
 		customAvatars.doneLoading = true;
@@ -338,27 +340,30 @@ var customAvatars = {
 		//for(sVar in customAvatars.roomControl.users) IDs.push(sVar);
 		//customAvatars.LoadAvatars(IDs);
 		
-		var listeners = [];
-
-		for(sVar in customAvatars.roomControl.users){
-			var sIndexOf = customAvatars.roomControl.djids.indexOf(sVar);
-			var sObj = $.extend({}, customAvatars.roomControl.users[sVar]);
+		var listenerIDs = Object.keys(customAvatars.roomControl.users);
+		customAvatars.log('Replacing ' + listenerIDs.length + ' users.');
+		for(var i = 0; i < listenerIDs.length; ++i){
+			var sIndexOf = customAvatars.roomControl.djids.indexOf(listenerIDs[i]);
+			var sObj = $.extend({}, customAvatars.roomControl.users[listenerIDs[i]]);
+			customAvatars.log('Currently on ' + (i+1) + ' out of ' + listenerIDs.length + ' ('+listenerIDs[i]+')');
 			if(sIndexOf == -1){
-				listeners.push(sObj);
-				customAvatars.roomView.removeListener(customAvatars.roomControl.users[sVar]);
+				customAvatars.roomView.removeListener(customAvatars.roomControl.users[listenerIDs[i]]);
+				customAvatars.roomView.addListener(sObj, true);
 			}else{
 				DJs[sIndexOf] = sObj;
 				if(customAvatars.roomView.current_dj && sObj.userid == customAvatars.roomView.current_dj[0]) mCurrentDJIndex = sIndexOf;
 			}
 		}
 		
-		for(var i = 0; i < listeners.length; ++i) customAvatars.roomView.addListener(listeners[i], true);
+		customAvatars.log('Replacing DJs');
 		for(var i = 4; i >= 0; --i) customAvatars.roomView.removeDj(i);
 		for(var i = 0; i < 5; ++i) if(DJs[i]) customAvatars.roomView.addDj(DJs[i], i);
 		
+		customAvatars.log('Setting active DJ back');
 		if(mCurrentDJIndex !== null)
 			customAvatars.roomView.set_active_dj(mCurrentDJIndex);
 			
+		customAvatars.log('Resetting votes');
 		for(var i = 0; i < customAvatars.roomControl.upvoters.length; ++i){
 			var sUpvoterId = customAvatars.roomControl.upvoters[i];
 			var sUser = customAvatars.roomControl.users[sUpvoterId];
@@ -373,24 +378,24 @@ if(Room.prototype.old_loadLayout === undefined){
 		this.old_loadLayout();
 		var oldAddedToDOM = this.onAddedToDOM;
 		this.onAddedToDOM = function(){
-			if(customAvatars.doneLoading === true){
-				customAvatars.doneLoading = false;
-				if(customAvatars.bootStrapped !== null){
-					customAvatars.log('Cancelling bootstrap', customAvatars.bootStrapped);
-					clearTimeout(customAvatars.bootStrapped);
-				}
-			}else{
-				if(customAvatars.deferredLoading !== null){
-					var self = this;
-					$.when(customAvatars.deferredLoading).done(function(){
-						customAvatars.Clobber(self);
-					});
-					return;
-				}
-			}
 			customAvatars.log("!!Dom Added!!");
 			if(oldAddedToDOM)
 				oldAddedToDOM();
+			
+			if(customAvatars.doneLoading === true){
+				customAvatars.doneLoading = false;
+				if(customAvatars.bootStrapped !== null){
+					clearTimeout(customAvatars.bootStrapped);
+					customAvatars.log('Cancelling bootstrap', customAvatars.bootStrapped);
+				}
+			}else if(customAvatars.deferredLoading !== null){
+				var self = this;
+				$.when(customAvatars.deferredLoading).done(function(){
+					customAvatars.Clobber(self);
+				});
+				return;
+			}
+			customAvatars.deferredLoading = jQuery.Deferred();
 			customAvatars.Clobber(this);
 		}
 	}
