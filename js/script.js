@@ -14,6 +14,7 @@ var customAvatars = {
 	roomViewName: null,
 	roomView: null,
 	deferredControls: null,
+	deferredDatabase: null,
 	bootStrapped: null,
 	buttonsAdded: false,
 	GetAvatar: (function(pUser){
@@ -34,7 +35,7 @@ var customAvatars = {
 	GetDatabase: function(){
 		customAvatars.log("Getting Database");
 		var that = this;
-		return $.get("http://turntablecustoms.com/mods/customavatardatabaseUpdate2.php?v="+Date.now(), function(pData){
+		return customAvatars.deferredDatabase = $.get("http://turntablecustoms.com/mods/customavatardatabaseUpdate2.php?v="+Date.now(), function(pData){
 			that.gotDatabase = true;
 			that.log("Got Database");
 			that.LoadDatabase(JSON.parse(pData));
@@ -109,7 +110,7 @@ var customAvatars = {
 		customAvatars.doneLoadingDatabase = false;
 		customAvatars.deferredControls = jQuery.Deferred();
 		customAvatars.log('Deferring for DB and controls');
-		$.when(customAvatars.GetDatabase(), customAvatars.deferredControls)
+		$.when(customAvatars.deferredDatabase === null ? customAvatars.GetDatabase() : customAvatars.deferredDatabase, customAvatars.deferredControls)
 		.then(customAvatars.Initialize);
 		customAvatars.log('Fetching control and view');
 		customAvatars.GetRoomControl();
@@ -162,7 +163,7 @@ var customAvatars = {
 					customAvatars.log('Resolving, got controls.');
 					customAvatars.deferredControls.resolve();//customAvatars.Initialize();
 					return; 
-				} 
+				}
 			}
 			/// We already have the callback object, so we can just start loading the custom avatars.
 		else{ 
