@@ -16,7 +16,11 @@ var customAvatars = {
 	deferredControls: null,
 	deferredDatabase: null,
 	bootStrapped: null,
-	buttonsAdded: false,
+	initialized: false,
+	spotlightParticles: [],
+	oldAddDj: null,
+	oldAddListener: null,
+	oldDraw: null,
 	GetAvatar: (function(pUser){
 			var pId = pUser.userid;
 			
@@ -85,36 +89,6 @@ var customAvatars = {
 		customAvatars.log('Loaded database');
 		customAvatars.doneLoadingDatabase = true;
 	},
-	BootStrap: function(){
-		customAvatars.log('Attempting to bootstrap.');
-		customAvatars.bootStrapped = setTimeout(function(){
-			customAvatars.log('Ran out, relying on bootstrap.');
-			customAvatars.doneLoading = customAvatars.roomControl !== null;
-			customAvatars.deferredLoading = jQuery.Deferred();
-			if(customAvatars.doneLoading) return;
-			customAvatars.roomControl = null;
-			customAvatars.roomView = null;
-			customAvatars.Reload();
-		}, 3000);
-		///TODO: setTimeout(Reload(), 10000);... If hasn't loaded.
-	},
-	Clobber: function(self){
-		customAvatars.log('!!!Full clobber reload!!!');
-		customAvatars.roomControl = self === undefined ? null : self;
-		customAvatars.roomView = null;
-		customAvatars.Reload();
-	},
-	Reload: function (){
-		customAvatars.log('Reloading controls and view');
-		if(!customAvatars.doneLoadingDatabase) return;
-		customAvatars.doneLoadingDatabase = false;
-		customAvatars.deferredControls = jQuery.Deferred();
-		customAvatars.log('Deferring for DB and controls');
-		$.when(customAvatars.deferredDatabase === null ? customAvatars.GetDatabase() : customAvatars.deferredDatabase, customAvatars.deferredControls)
-		.then(customAvatars.Initialize);
-		customAvatars.log('Fetching control and view');
-		customAvatars.GetRoomControl();
-	},
 	GetRoomControl: function(){
 		customAvatars.doneLoading = false;
 		if(customAvatars.DOMwaitingForLock === true)
@@ -163,7 +137,7 @@ var customAvatars = {
 					customAvatars.log('Resolving, got controls.');
 					customAvatars.deferredControls.resolve();//customAvatars.Initialize();
 					return; 
-				}
+				} 
 			}
 			/// We already have the callback object, so we can just start loading the custom avatars.
 		else{ 
@@ -173,6 +147,36 @@ var customAvatars = {
 		}
 		setTimeout(customAvatars.GetCallbackObject, 100);
 	},
+	BootStrap: function(){
+		customAvatars.log('Attempting to bootstrap.');
+		customAvatars.bootStrapped = setTimeout(function(){
+			customAvatars.log('Ran out, relying on bootstrap.');
+			customAvatars.doneLoading = customAvatars.roomControl !== null;
+			customAvatars.deferredLoading = jQuery.Deferred();
+			if(customAvatars.doneLoading) return;
+			customAvatars.roomControl = null;
+			customAvatars.roomView = null;
+			customAvatars.Reload();
+		}, 3000);
+		///TODO: setTimeout(Reload(), 10000);... If hasn't loaded.
+	},
+	Clobber: function(self){
+		customAvatars.log('!!!Full clobber reload!!!');
+		customAvatars.roomControl = self === undefined ? null : self;
+		customAvatars.roomView = null;
+		customAvatars.Reload();
+	},
+	Reload: function (){
+		customAvatars.log('Reloading controls and view');
+		if(!customAvatars.doneLoadingDatabase) return;
+		customAvatars.doneLoadingDatabase = false;
+		customAvatars.deferredControls = jQuery.Deferred();
+		customAvatars.log('Deferring for DB and controls');
+		$.when(customAvatars.deferredDatabase === null ? customAvatars.GetDatabase() : customAvatars.deferredDatabase, customAvatars.deferredControls)
+		.then(customAvatars.Initialize);
+		customAvatars.log('Fetching control and view');
+		customAvatars.GetRoomControl();
+	},
 	/// This is where we modify TurnTable's code so that it works with our new system of avatars.
 	/// First we modify the add_listener call, so we can make sure it uses the proper avatar id.
 	/// Then, we modify the add_dj call, so we can make sure the newly added DJ is using the correct avatar id.
@@ -181,82 +185,6 @@ var customAvatars = {
 	/// Finally, we reload all of the users that are already being shown, so that they use their custom avatars.
 	Initialize: function(){
 		customAvatars.log("Setting up hooks.");
-
-		BlackSwanDancer.prototype.shadeImage = function(f, b, e) {
-		  if (!e) {
-			e = "#100911";
-		  }
-		  var g = util.buildTree(["canvas"]);
-		  var c = $.Deferred();
-		  var h = this;
-		  b.done(function() {
-			g.width = f.width;
-			g.height = f.height;
-			var d = g.getContext("2d");
-			d.drawImage(f, 0, 0, f.width, f.height);
-			d.globalCompositeOperation = "source-atop";
-			d.globalAlpha = 0.5;
-			d.fillStyle = e;
-			d.fillRect(0, 0, f.width, f.height);
-			c.resolve();
-		  });
-		  return [g, c];
-		}
-
-		var oldAddDj = $.proxy(customAvatars.roomView.addDj, customAvatars.roomView);
-		customAvatars.roomView.addDj = function(user, position, junk){
-			customAvatars.log('DJ', user, position);
-			if(!user.id && user.userid) user.id = user.userid;
-			if(avatars[user.id] && avatars[user.id].size)
-				user.custom_avatar = avatars[user.id];
-			var userLaptop = customAvatars.GetProperty(user.id, 'laptop');
-			if(userLaptop)
-				user.laptop = userLaptop;
-			oldAddDj(user, position, junk);
-		}
-		
-		var oldAddListener = $.proxy(customAvatars.roomView.addListener, customAvatars.roomView);
-		customAvatars.roomView.addListener = function(user, entropy){
-			customAvatars.log('Listener', user);
-			if(!user.id && user.userid) user.id = user.userid;
-			if(avatars[user.id] && avatars[user.id].size)
-				user.custom_avatar = avatars[user.id];
-			oldAddListener(user, entropy);
-		}
-		
-		if(!customAvatars.roomView.floor.old_draw && !customAvatars.roomView.djBooth.old_draw)
-			customAvatars.roomView.floor.old_draw = customAvatars.roomView.djBooth.old_draw = customAvatars.roomView.djBooth.draw;
-		customAvatars.roomView.djBooth.draw = customAvatars.roomView.floor.draw = function(a,b,c,d,e){
-			if(c)
-				for(var i = 0; i < c.length; ++i)
-				{
-					var renderable = c[i];
-					var avatarInfo = renderable.dancer;
-					if(!avatarInfo.imagesLoaded) continue;
-					var preScale = .55;
-					if(avatarInfo.state == "back")
-						preScale = (avatarInfo.data.customScaleAt / 100);
-					for(var part in avatarInfo.parts){
-						var partInfo = avatarInfo.parts[part];
-						var shadedPart = avatarInfo.shadedParts[part];
-						if(!partInfo) continue;
-						if(partInfo.src.match("^http://turntablecustoms.com")){
-							if(!partInfo.oldWidth && partInfo.width){
-								partInfo.oldWidth = partInfo.width;
-								partInfo.oldHeight = partInfo.height;
-							}
-							partInfo.width = Math.ceil(partInfo.oldWidth / preScale);
-							partInfo.height = Math.ceil(partInfo.oldHeight / preScale);
-							if(shadedPart.width != partInfo.width || shadedPart.height != partInfo.height){
-								var shaded = avatarInfo.shadeImage(partInfo, {done: function(a){a();}});
-								avatarInfo.shadedParts[part] = shaded[0];
-							}
-						}
-					}
-					//avatarInfo.calculateBoundingBox(true);
-				}
-			this.old_draw(a,b,c,d,e);
-		}
 		
 		function particle(xOrigin,yOrigin){
 			//speed, life, location, life, colors
@@ -277,10 +205,9 @@ var customAvatars = {
 		}
 
 		function generateParticles(){
-			customAvatars.roomView.djBooth.spotlightParticles = [];
 			for(var i = 0; i < 10; ++i)
 				setTimeout(function(){
-				customAvatars.roomView.djBooth.spotlightParticles.push(new particle(customAvatars.roomView.spotlightOffset.x+40, 0));
+					customAvatars.spotlightParticles.push(new particle(customAvatars.roomView.spotlightOffset.x+40, 0));
 				}, i * 400);
 		}
 
@@ -321,7 +248,7 @@ var customAvatars = {
 					if(p.remaining_life < 0 || p.radius < 0)
 					{
 						//a brand new particle replacing the dead one
-						this.djBooth.spotlightParticles[k] = new particle(this.spotlightOffset.x+40, 0);
+						customAvatars.spotlightParticles[k] = new particle(this.spotlightOffset.x+40, 0);
 					}
 				}
 			}else customAvatars.isTC = false;
@@ -329,7 +256,10 @@ var customAvatars = {
 		  }
 		}, customAvatars.roomView);
 		
-		if(customAvatars.buttonsAdded === false) customAvatars.AddButtons();
+		if(customAvatars.initialized === false){
+			customAvatars.AddButtons();
+			customAvatars.initialized = true;
+		}
 		customAvatars.ReplaceAllUsers();
 		
 		customAvatars.log('Unlocking and resolving');
@@ -339,12 +269,12 @@ var customAvatars = {
 		deferredLock.resolve();
 	},
 	AddButtons: function(){
+		customAvatars.buttonsAdded = true;
 		customAvatars.log('Adding buttons');
 		var facebookLike = $('<li class="option round-tipsy left" title="Like us to get the latest TC news!">Like TC on FB!</li>');
 		facebookLike.click(function(){ window.open('https://www.facebook.com/TurntableCustoms'); });
 		//var fanUs = $('<li class="option" title="Click here to fan us on Turntable.">Fan TC peeps!</li>');
 		$('#settings-dropdown li').eq(-2).after(facebookLike);//.after(fanUs);
-		customAvatars.buttonsAdded = true;
 	},
 	/// We start by loading the avatars for the IDs
 	/// Then, we try to find out if the user is currently a DJ or not, if they are, make sure we write down which spot they're in.
@@ -423,6 +353,80 @@ if(Room.prototype.old_loadLayout === undefined){
 			customAvatars.Clobber(this);
 		}
 	}
+}
+BlackSwanDancer.prototype.shadeImage = function(f, b, e) {
+  if (!e) {
+	e = "#100911";
+  }
+  var g = util.buildTree(["canvas"]);
+  var c = $.Deferred();
+  var h = this;
+  b.done(function() {
+	g.width = f.width;
+	g.height = f.height;
+	var d = g.getContext("2d");
+	d.drawImage(f, 0, 0, f.width, f.height);
+	d.globalCompositeOperation = "source-atop";
+	d.globalAlpha = 0.5;
+	d.fillStyle = e;
+	d.fillRect(0, 0, f.width, f.height);
+	c.resolve();
+  });
+  return [g, c];
+}
+
+customAvatars.oldAddDj = RoomView.prototype.addDj; 
+RoomView.prototype.addDj = function(user, position, junk){
+	customAvatars.log('DJ', user, position);
+	if(!user.id && user.userid) user.id = user.userid;
+	if(avatars[user.id] && avatars[user.id].size)
+		user.custom_avatar = avatars[user.id];
+	var userLaptop = customAvatars.GetProperty(user.id, 'laptop');
+	if(userLaptop)
+		user.laptop = userLaptop;
+	$.proxy(customAvatars.oldAddDj, this)(user, position, junk);
+}
+
+customAvatars.oldAddListener = RoomView.prototype.addListener;
+RoomView.prototype.addListener = function(user, entropy){
+	customAvatars.log('Listener', user);
+	if(!user.id && user.userid) user.id = user.userid;
+	if(avatars[user.id] && avatars[user.id].size)
+		user.custom_avatar = avatars[user.id];
+	$.proxy(customAvatars.oldAddListener, this)(user, entropy);
+}
+
+customAvatars.oldDraw = Stage.prototype.draw;
+Stage.prototype.draw = function(a,b,c,d,e){
+	if(c)
+		for(var i = 0; i < c.length; ++i)
+		{
+			var renderable = c[i];
+			var avatarInfo = renderable.dancer;
+			if(!avatarInfo.imagesLoaded) continue;
+			var preScale = .55;
+			if(avatarInfo.state == "back")
+				preScale = (avatarInfo.data.customScaleAt / 100);
+			for(var part in avatarInfo.parts){
+				var partInfo = avatarInfo.parts[part];
+				var shadedPart = avatarInfo.shadedParts[part];
+				if(!partInfo) continue;
+				if(partInfo.src.match("^http://turntablecustoms.com")){
+					if(!partInfo.oldWidth && partInfo.width){
+						partInfo.oldWidth = partInfo.width;
+						partInfo.oldHeight = partInfo.height;
+					}
+					partInfo.width = Math.ceil(partInfo.oldWidth / preScale);
+					partInfo.height = Math.ceil(partInfo.oldHeight / preScale);
+					if(shadedPart.width != partInfo.width || shadedPart.height != partInfo.height){
+						var shaded = avatarInfo.shadeImage(partInfo, {done: function(a){a();}});
+						avatarInfo.shadedParts[part] = shaded[0];
+					}
+				}
+			}
+			//avatarInfo.calculateBoundingBox(true);
+		}
+	$.proxy(customAvatars.oldDraw, this)(a,b,c,d,e);//this.old_draw(a,b,c,d,e);
 }
 
 /// This is where we begin :D
