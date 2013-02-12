@@ -15,6 +15,6 @@
    "manifest_version": 2,
    "name": "Turntable Customs",
    "permissions": [ "http://turntable.fm/" ],
-   "version": "2.7.0.8",
+   "version": "2.7.1.0",
    "web_accessible_resources": [ "js/customavatars.js", "js/inject.js", "js/jquery.min.js", "js/reset.js", "js/script.js", "js/underscore.js", "css/customavi.css" ]
 }

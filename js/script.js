@@ -18,8 +18,10 @@ var customAvatars = {
 	bootStrapped: null,
 	initialized: false,
 	spotlightParticles: [],
+	loadLayout: null,
 	oldAddDj: null,
 	oldAddListener: null,
+	setupProfileOverlay: null,
 	oldDraw: null,
 	GetAvatar: (function(pUser){
 			var pId = pUser.userid;
@@ -29,6 +31,7 @@ var customAvatars = {
 			return pId;
 	}),
 	log: function(){
+		if(!DEBUG_MODE) return;
 		console.log.apply(console, arguments);
 	},
 	GetProperty: function(userId, propertyName){
@@ -222,9 +225,9 @@ var customAvatars = {
 					customAvatars.isTC = true;
 					generateParticles();
 				}
-				for(var k = 0; k < this.djBooth.spotlightParticles.length; ++k)	
+				for(var k = 0; k < customAvatars.spotlightParticles.length; ++k)	
 				{
-					var p = this.djBooth.spotlightParticles[k];
+					var p = customAvatars.spotlightParticles[k];
 					x.beginPath();
 					//changing opacity according to the life.
 					//opacity goes to 0 at the end of life of a particle
@@ -320,40 +323,52 @@ var customAvatars = {
 			var sUser = customAvatars.roomControl.users[sUpvoterId];
 			customAvatars.roomView.update_vote(sUser, "up", 0);
 		}
+	},
+	applyCustom: function(user, noLaptop){
+		if(!user.id && user.userid) user.id = user.userid;
+		if(avatars[user.id] && avatars[user.id].size)
+			user.custom_avatar = avatars[user.id];
+		if(!customAvatars.additionalProperties) return user;
+		var userLaptop = customAvatars.GetProperty(user.id, 'laptop');
+		if(userLaptop && noLaptop === undefined)
+			user.laptop = userLaptop;
+		var userVerified = customAvatars.GetProperty(user.id, 'verified');
+		if(userVerified)
+			user.verified = userVerified;
+		return user;
 	}
 };
 
-if(Room.prototype.old_loadLayout === undefined){
-	Room.prototype.old_loadLayout = Room.prototype.loadLayout;
-	Room.prototype.loadLayout = function(){
-		this.old_loadLayout();
-		var oldAddedToDOM = this.onAddedToDOM;
-		this.onAddedToDOM = function(){
-			customAvatars.log("!!Dom Added!!");
-			if(oldAddedToDOM)
-				oldAddedToDOM();
-			
-			if(customAvatars.doneLoading === true){
-				customAvatars.doneLoading = false;
-				if(customAvatars.bootStrapped !== null){
-					clearTimeout(customAvatars.bootStrapped);
-					customAvatars.log('Cancelling bootstrap', customAvatars.bootStrapped);
-				}
-			}else if(customAvatars.deferredLoading !== null){
-				customAvatars.DOMwaitingForLock = true;
-				var self = this;
-				$.when(customAvatars.deferredLoading).done(function(){
-					customAvatars.DOMwaitingForLock = false;
-					customAvatars.log('Lock released, clobbering');
-					customAvatars.Clobber(self);
-				});
-				return;
+if(customAvatars.loadLayout === null) customAvatars.loadLayout = Room.prototype.loadLayout;
+Room.prototype.loadLayout = function(){
+	customAvatars.loadLayout.apply(this, arguments);
+	var oldAddedToDOM = this.onAddedToDOM;
+	this.onAddedToDOM = function(){
+		customAvatars.log("!!Dom Added!!");
+		if(oldAddedToDOM)
+			oldAddedToDOM();
+		
+		if(customAvatars.doneLoading === true){
+			customAvatars.doneLoading = false;
+			if(customAvatars.bootStrapped !== null){
+				clearTimeout(customAvatars.bootStrapped);
+				customAvatars.log('Cancelling bootstrap', customAvatars.bootStrapped);
 			}
-			customAvatars.deferredLoading = jQuery.Deferred();
-			customAvatars.Clobber(this);
+		}else if(customAvatars.deferredLoading !== null){
+			customAvatars.DOMwaitingForLock = true;
+			var self = this;
+			$.when(customAvatars.deferredLoading).done(function(){
+				customAvatars.DOMwaitingForLock = false;
+				customAvatars.log('Lock released, clobbering');
+				customAvatars.Clobber(self);
+			});
+			return;
 		}
+		customAvatars.deferredLoading = jQuery.Deferred();
+		customAvatars.Clobber(this);
 	}
 }
+	
 BlackSwanDancer.prototype.shadeImage = function(f, b, e) {
   if (!e) {
 	e = "#100911";
@@ -375,28 +390,29 @@ BlackSwanDancer.prototype.shadeImage = function(f, b, e) {
   return [g, c];
 }
 
-customAvatars.oldAddDj = RoomView.prototype.addDj; 
+if(customAvatars.oldAddDj === null) customAvatars.oldAddDj = RoomView.prototype.addDj; 
 RoomView.prototype.addDj = function(user, position, junk){
 	customAvatars.log('DJ', user, position);
-	if(!user.id && user.userid) user.id = user.userid;
-	if(avatars[user.id] && avatars[user.id].size)
-		user.custom_avatar = avatars[user.id];
-	var userLaptop = customAvatars.GetProperty(user.id, 'laptop');
-	if(userLaptop)
-		user.laptop = userLaptop;
-	$.proxy(customAvatars.oldAddDj, this)(user, position, junk);
+	user = customAvatars.applyCustom(user);
+	customAvatars.oldAddDj.apply(this, arguments);//$.proxy(customAvatars.oldAddDj, this).apply(arguments);
 }
 
-customAvatars.oldAddListener = RoomView.prototype.addListener;
+if(customAvatars.oldAddListener === null) customAvatars.oldAddListener = RoomView.prototype.addListener;
 RoomView.prototype.addListener = function(user, entropy){
 	customAvatars.log('Listener', user);
-	if(!user.id && user.userid) user.id = user.userid;
-	if(avatars[user.id] && avatars[user.id].size)
-		user.custom_avatar = avatars[user.id];
-	$.proxy(customAvatars.oldAddListener, this)(user, entropy);
+	user = customAvatars.applyCustom(user);
+	customAvatars.oldAddListener.apply(this, arguments);//$.proxy(customAvatars.oldAddListener, this).apply(arguments);
+}
+///
+if(customAvatars.setupProfileOverlay === null) customAvatars.setupProfileOverlay = Room.prototype.setupProfileOverlay;
+Room.prototype.setupProfileOverlay = function(user){
+	if(user && (user.userid || user.id))
+		user = customAvatars.applyCustom(user, true);
+	return customAvatars.setupProfileOverlay.apply(this, arguments);//$.proxy(customAvatars.buildTree, util)(n,h);
 }
 
-customAvatars.oldDraw = Stage.prototype.draw;
+customAvatars.log("Draw replaced");
+if(customAvatars.oldDraw === null) customAvatars.oldDraw = Stage.prototype.draw;
 Stage.prototype.draw = function(a,b,c,d,e){
 	if(c)
 		for(var i = 0; i < c.length; ++i)
@@ -426,7 +442,16 @@ Stage.prototype.draw = function(a,b,c,d,e){
 			}
 			//avatarInfo.calculateBoundingBox(true);
 		}
-	$.proxy(customAvatars.oldDraw, this)(a,b,c,d,e);//this.old_draw(a,b,c,d,e);
+	customAvatars.oldDraw.apply(this, arguments);//$.proxy(customAvatars.oldDraw, this)(a,b,c,d,e);//this.old_draw(a,b,c,d,e);
+}
+
+console.log(chrome);
+console.log(chrome.extension);
+console.log(chrome.runtime);
+if(chrome.runtime !== undefined){
+	try{
+	console.log(chrome.runtime.id);	
+	}catch(ex){}
 }
 
 /// This is where we begin :D
