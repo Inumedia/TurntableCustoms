@@ -189,8 +189,12 @@ var customAvatars = {
 	},
 	Reload: function (){
 		customAvatars.log('Reloading controls and view');
-		if(!customAvatars.doneLoadingDatabase) return;
-		customAvatars.doneLoadingDatabase = false;
+		if(!customAvatars.doneLoadingDatabase){
+			customAvatars.log('Waiting for database still, not going.');
+			return;
+		}
+		if(!customAvatars.deferredDatabase)
+			customAvatars.doneLoadingDatabase = false;
 		customAvatars.deferredControls = jQuery.Deferred();
 		customAvatars.log('Deferring for DB and controls');
 		$.when(customAvatars.deferredDatabase || customAvatars.GetDatabase(), customAvatars.deferredControls)
