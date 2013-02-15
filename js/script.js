@@ -20,8 +20,6 @@ var customAvatars = {
 	initialized: false,
 	spotlightParticles: [],
 	loadLayout: null,
-	oldAddDj: null,
-	oldAddListener: null,
 	setupProfileOverlay: null,
 	oldDraw: null,
 	GetAvatar: (function(pUser){
@@ -189,6 +187,18 @@ var customAvatars = {
 		customAvatars.log('Fetching control and view');
 		customAvatars.GetRoomControl();
 	},
+	HookFunction: function(target, name, replacement){
+		if(Array.isArray(name))
+			for(var i = 0; i < name.length; ++i)
+				this.HookFunction(target, name[i], replacement);
+		else{
+			var cached = target[name];
+			if(cached != undefined && cached.toString() == replacement.toString()) return;
+			target[name] = function(){
+				replacement.call(this, cached, arguments);
+			};
+		}
+	},
 	/// This is where we modify TurnTable's code so that it works with our new system of avatars.
 	/// First we modify the add_listener call, so we can make sure it uses the proper avatar id.
 	/// Then, we modify the add_dj call, so we can make sure the newly added DJ is using the correct avatar id.
@@ -200,19 +210,11 @@ var customAvatars = {
 		customAvatars.PostLoading();
 		customAvatars.log("Setting up hooks.");
 		
-		if(customAvatars.oldAddDj === null) customAvatars.oldAddDj = customAvatars.roomView.addDj
-		customAvatars.roomView.addDj = function(user, position, junk){
-			customAvatars.log('DJ', user, position);
-			user = customAvatars.applyCustom(user);
-			customAvatars.oldAddDj.apply(this, arguments);
-		}
-
-		if(customAvatars.oldAddListener === null) customAvatars.oldAddListener = customAvatars.roomView.addListener;
-		customAvatars.roomView.addListener = function(user, entropy){
-			customAvatars.log('Listener', user);
-			user = customAvatars.applyCustom(user);
-			customAvatars.oldAddListener.apply(this, arguments);
-		}
+		customAvatars.HookFunction(customAvatars.roomView, ["addDj", "addListener"], function(cached, args){
+			customAvatars.log('Applying Custom', args, this == customAvatars.roomView);
+			args[0] = customAvatars.applyCustom(args[0]);
+			cached.apply(this, args);
+		});
 		
 		function particle(xOrigin,yOrigin){
 			//speed, life, location, life, colors
@@ -422,7 +424,6 @@ Room.prototype.setupProfileOverlay = function(user){
 	return customAvatars.setupProfileOverlay.apply(this, arguments);//$.proxy(customAvatars.buildTree, util)(n,h);
 }
 
-customAvatars.log("Draw replaced");
 if(customAvatars.oldDraw === null) customAvatars.oldDraw = requirejs("blackswan/blackswan").Stage.prototype.draw;
 requirejs("blackswan/blackswan").Stage.prototype.draw = function(a,b,c,d,e){
 	if(c)
