@@ -2,6 +2,17 @@ var customAvatars = {
 	/// Here, we return the appropriate avatar for the user
 	/// If we don't have a custom avatar, we return the regular avatar that they selected
 	/// otherwise, we return their custom avatar.
+	laptopUrls: {
+		laptop_mac: "https://s3.amazonaws.com/static.turntable.fm/roommanager_assets/props/laptop_mac_11.png",
+		laptop_pc: "https://s3.amazonaws.com/static.turntable.fm/roommanager_assets/props/laptop_windows_11.png",
+		laptop_linux: "https://s3.amazonaws.com/static.turntable.fm/roommanager_assets/props/laptop_linux_11.png",
+		laptop_ubuntu: "https://s3.amazonaws.com/static.turntable.fm/roommanager_assets/props/laptop_ubuntu_11.png",
+		laptop_chrome: "https://s3.amazonaws.com/static.turntable.fm/roommanager_assets/props/laptop_chrome_11.png",
+		laptop_iphone: "https://s3.amazonaws.com/static.turntable.fm/roommanager_assets/props/laptop_iphone.png",
+		laptop_cake: "https://s3.amazonaws.com/static.turntable.fm/roommanager_assets/props/cake.png",
+		laptop_intel: "https://s3.amazonaws.com/static.turntable.fm/roommanager_assets/props/laptop_intel.png",
+		laptop_android: "https://s3.amazonaws.com/static.turntable.fm/roommanager_assets/props/laptop_android.png"
+	},
 	isTC: false,
 	doneLoading: true,
 	deferredLoading: null,
@@ -72,8 +83,8 @@ var customAvatars = {
 			if(customAvatar.processing)
 				sClone = $.extend(true, sClone == undefined ? {} : sClone, customAvatar.processing);
 			var userid = customAvatar.userid;
-			//if(customAvatar.laptop && !(laptopUrls === undefined))
-			//	laptopUrls['laptop_' + customAvatar.laptop] = 'http://turntablecustoms.com/facesimg/laptops/' + customAvatar.laptop;
+			if(customAvatar.laptop && !(customAvatars.laptopUrls === undefined))
+				customAvatars.laptopUrls['laptop_' + customAvatar.laptop] = 'http://turntablecustoms.com/facesimg/laptops/' + customAvatar.laptop;
 			delete customAvatar["baseid"];
 			delete customAvatar["scale"];
 			delete customAvatar["processing"];
@@ -209,6 +220,26 @@ var customAvatars = {
 		customAvatars.log("Calling postLoading call backs");
 		customAvatars.PostLoading();
 		customAvatars.log("Setting up hooks.");
+		
+		///Beware yee who enter, dragons lay below here
+		///
+		///============================================
+		///
+		var oldAddDj = customAvatars.roomView.addDj.toString();
+		oldAddDj = oldAddDj.substring(oldAddDj.indexOf('{')+1, oldAddDj.length-1)
+		var laptopMatches = oldAddDj.match('([a-z]*)\\["laptop_');
+		var laptopIdentifier = laptopMatches[1];
+		var laptopMatch = laptopMatches[0];
+		var blackSwanIdentifier = oldAddDj.match('([a-z]*)\.BlackSwanDancer')[1];
+		var blackSwanInstance = blackSwanIdentifier + "=requirejs('blackswan/blackswan');";
+		customAvatars.addDj = blackSwanInstance + oldAddDj.replace(laptopMatch, laptopMatch.replace(laptopIdentifier, 'customAvatars.laptopUrls'))
+			.replace('this', 'customAvatars.roomView');
+		customAvatars.addDjStr = customAvatars.addDj;
+		customAvatars.roomView.addDj = new Function("e", "t", customAvatars.addDj);
+		///
+		///Now leaving dragon lair
+		///
+		///============================================
 		
 		customAvatars.HookFunction(customAvatars.roomView, ["addDj", "addListener"], function(cached, args){
 			customAvatars.log('Applying Custom', args, this == customAvatars.roomView);
