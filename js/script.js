@@ -6,6 +6,7 @@ var customAvatars = {
 	doneLoading: true,
 	deferredLoading: null,
 	DOMwaitingForLock: false,
+	onPostLoading: [],
 	gotDatabase: false,
 	doneLoadingDatabase: true,
 	errorLoadingDatabase: false,
@@ -31,8 +32,16 @@ var customAvatars = {
 			return pId;
 	}),
 	log: function(){
-		if(!DEBUG_MODE) return;
+		//if(!DEBUG_MODE) return;
 		console.log.apply(console, arguments);
+	},
+	PostLoading: function(enQueue){
+		if(enQueue !== undefined){
+			this.onPostLoading.push(enQueue);
+		}else{
+			for(var i = 0; i < this.onPostLoading.length; ++i)
+				this.onPostLoading[i](this);
+		}
 	},
 	GetProperty: function(userId, propertyName){
 		if(customAvatars.additionalProperties[userId] && customAvatars.additionalProperties[userId][propertyName])
@@ -65,8 +74,8 @@ var customAvatars = {
 			if(customAvatar.processing)
 				sClone = $.extend(true, sClone == undefined ? {} : sClone, customAvatar.processing);
 			var userid = customAvatar.userid;
-			if(customAvatar.laptop)
-				laptopUrls['laptop_' + customAvatar.laptop] = 'http://turntablecustoms.com/facesimg/laptops/' + customAvatar.laptop;
+			//if(customAvatar.laptop && !(laptopUrls === undefined))
+			//	laptopUrls['laptop_' + customAvatar.laptop] = 'http://turntablecustoms.com/facesimg/laptops/' + customAvatar.laptop;
 			delete customAvatar["baseid"];
 			delete customAvatar["scale"];
 			delete customAvatar["processing"];
@@ -175,7 +184,7 @@ var customAvatars = {
 		customAvatars.doneLoadingDatabase = false;
 		customAvatars.deferredControls = jQuery.Deferred();
 		customAvatars.log('Deferring for DB and controls');
-		$.when(customAvatars.deferredDatabase === null ? customAvatars.GetDatabase() : customAvatars.deferredDatabase, customAvatars.deferredControls)
+		$.when(customAvatars.deferredDatabase || customAvatars.GetDatabase(), customAvatars.deferredControls)
 		.then(customAvatars.Initialize);
 		customAvatars.log('Fetching control and view');
 		customAvatars.GetRoomControl();
@@ -187,7 +196,23 @@ var customAvatars = {
 	/// otherwise it would try to scale our avatars when the user goes up on deck, which we don't want/don't support.
 	/// Finally, we reload all of the users that are already being shown, so that they use their custom avatars.
 	Initialize: function(){
+		customAvatars.log("Calling postLoading call backs");
+		customAvatars.PostLoading();
 		customAvatars.log("Setting up hooks.");
+		
+		if(customAvatars.oldAddDj === null) customAvatars.oldAddDj = customAvatars.roomView.addDj
+		customAvatars.roomView.addDj = function(user, position, junk){
+			customAvatars.log('DJ', user, position);
+			user = customAvatars.applyCustom(user);
+			customAvatars.oldAddDj.apply(this, arguments);
+		}
+
+		if(customAvatars.oldAddListener === null) customAvatars.oldAddListener = customAvatars.roomView.addListener;
+		customAvatars.roomView.addListener = function(user, entropy){
+			customAvatars.log('Listener', user);
+			user = customAvatars.applyCustom(user);
+			customAvatars.oldAddListener.apply(this, arguments);
+		}
 		
 		function particle(xOrigin,yOrigin){
 			//speed, life, location, life, colors
@@ -369,7 +394,7 @@ Room.prototype.loadLayout = function(){
 	}
 }
 	
-BlackSwanDancer.prototype.shadeImage = function(f, b, e) {
+requirejs("blackswan/blackswan").BlackSwanDancer.prototype.shadeImage = function(f, b, e) {
   if (!e) {
 	e = "#100911";
   }
@@ -390,20 +415,6 @@ BlackSwanDancer.prototype.shadeImage = function(f, b, e) {
   return [g, c];
 }
 
-if(customAvatars.oldAddDj === null) customAvatars.oldAddDj = RoomView.prototype.addDj; 
-RoomView.prototype.addDj = function(user, position, junk){
-	customAvatars.log('DJ', user, position);
-	user = customAvatars.applyCustom(user);
-	customAvatars.oldAddDj.apply(this, arguments);//$.proxy(customAvatars.oldAddDj, this).apply(arguments);
-}
-
-if(customAvatars.oldAddListener === null) customAvatars.oldAddListener = RoomView.prototype.addListener;
-RoomView.prototype.addListener = function(user, entropy){
-	customAvatars.log('Listener', user);
-	user = customAvatars.applyCustom(user);
-	customAvatars.oldAddListener.apply(this, arguments);//$.proxy(customAvatars.oldAddListener, this).apply(arguments);
-}
-///
 if(customAvatars.setupProfileOverlay === null) customAvatars.setupProfileOverlay = Room.prototype.setupProfileOverlay;
 Room.prototype.setupProfileOverlay = function(user){
 	if(user && (user.userid || user.id))
@@ -412,8 +423,8 @@ Room.prototype.setupProfileOverlay = function(user){
 }
 
 customAvatars.log("Draw replaced");
-if(customAvatars.oldDraw === null) customAvatars.oldDraw = Stage.prototype.draw;
-Stage.prototype.draw = function(a,b,c,d,e){
+if(customAvatars.oldDraw === null) customAvatars.oldDraw = requirejs("blackswan/blackswan").Stage.prototype.draw;
+requirejs("blackswan/blackswan").Stage.prototype.draw = function(a,b,c,d,e){
 	if(c)
 		for(var i = 0; i < c.length; ++i)
 		{
