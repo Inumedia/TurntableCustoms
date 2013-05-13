@@ -22,6 +22,7 @@ var customAvatars = {
 	doneLoadingDatabase: true,
 	errorLoadingDatabase: false,
 	additionalProperties: {},
+	app: null,
 	roomControl: null,
 	roomViewName: null,
 	roomView: null,
@@ -35,9 +36,9 @@ var customAvatars = {
 	oldDraw: null,
 	GetAvatar: (function(pUser){
 			var pId = pUser.userid;
+
+			return pUser.avatarid;
 			
-			if(!avatars[pId])
-				return pUser.avatarid;
 			return pId;
 	}),
 	log: function(){
@@ -55,6 +56,10 @@ var customAvatars = {
 	GetProperty: function(userId, propertyName){
 		if(customAvatars.additionalProperties[userId] && customAvatars.additionalProperties[userId][propertyName])
 			return customAvatars.additionalProperties[userId][propertyName];
+		return undefined;
+	},
+	SetProperty: function(userId, propertyName, propertyValue){
+		customAvatars.additionalProperties[userId][propertyName] = propertyValue;
 	},
 	/// This is what we call to fetch the remote database from our servers so that we can keep a current list of who has custom avatars.
 	GetDatabase: function(){
@@ -76,15 +81,17 @@ var customAvatars = {
 			var customAvatar = database[i];
 			var sClone = undefined;
 			if(customAvatar.baseid){
-				sClone = $.extend(true, {}, avatars[customAvatar.baseid]);
+				sClone = $.extend(true, {}, customAvatars.app.avatars[customAvatar.baseid]);
 				if(customAvatar.scale && sClone)
 					sClone.customScaleAt = customAvatar.scale;
 			}
 			if(customAvatar.processing)
 				sClone = $.extend(true, sClone == undefined ? {} : sClone, customAvatar.processing);
 			var userid = customAvatar.userid;
-			if(customAvatar.laptop && !(customAvatars.laptopUrls === undefined))
-				customAvatars.laptopUrls['laptop_' + customAvatar.laptop] = 'http://turntablecustoms.com/facesimg/laptops/' + customAvatar.laptop;
+			//if(customAvatar.laptop && !(customAvatars.laptopUrls === undefined))
+			//	customAvatars.laptopUrls['laptop_' + customAvatar.laptop] = 'http://turntablecustoms.com/facesimg/laptops/' + customAvatar.laptop;
+			delete customAvatar["laptop"];
+			
 			delete customAvatar["baseid"];
 			delete customAvatar["scale"];
 			delete customAvatar["processing"];
@@ -103,7 +110,8 @@ var customAvatars = {
 			/// And it contains alpha characters, which TurnTable doesn't use for its initial avatars.
 			if(sClone !== undefined){
 				sClone.avatarid = userid;
-				avatars[userid] = sClone;
+				customAvatars.app.avatars[userid] = sClone;
+				//avatars[userid] = sClone;
 			}
 		}
 		/// We're done loading the database, so we can continue with initializing.
@@ -122,21 +130,45 @@ var customAvatars = {
 			return;
 		}
 		customAvatars.log("Getting Room Control");
-		if(!customAvatars.roomControl) 
+		if(!customAvatars.roomControl)
 			for(sVar in turntable) {
 				customAvatars.roomControl = eval('turntable.'+sVar);
-				
+
 				if(!customAvatars.roomControl || !customAvatars.roomControl.selfId)
 					/// We'll try to find it again in a couple milli seconds.
 					setTimeout(customAvatars.GetRoomControl, 100);
 				else{
 					/// We have found the room control, and are continuing to find the callback object.
-					customAvatars.GetCallbackObject();			
+					customAvatars.GetApp();
 				}
 				return;
-			} 
+			}
 			/// We already have the room control, and are continuing to make sure we have the callback object.
-		else customAvatars.GetCallbackObject();
+		else customAvatars.GetApp();
+	},
+	GetApp: function(){
+		if(customAvatars.DOMwaitingForLock === true)
+		{
+			customAvatars.log('Detected waiting, unlocking and resolving.');
+			var deferredLock = customAvatars.deferredLoading;
+			customAvatars.deferredLoading = null;
+			customAvatars.doneLoading = true;
+			deferredLock.resolve();
+			return;
+		}
+		customAvatars.log("Getting App");
+		if(!customAvatars.app){
+			customAvatars.app = requirejs("app");
+			if(!customAvatars.app || customAvatars.app != customAvatars.roomControl)
+				/// We'll try to find it again in a couple milli seconds.
+				setTimeout(customAvatars.GetApp, 100);
+			else{
+				/// We have found the room control, and are continuing to find the callback object.
+				customAvatars.GetCallbackObject();
+			}
+			return;
+			/// We already have the room control, and are continuing to make sure we have the callback object.
+		}else customAvatars.GetCallbackObject();
 	},
 	GetCallbackObject: function(){
 		if(customAvatars.DOMwaitingForLock === true)
@@ -150,18 +182,18 @@ var customAvatars = {
 		}
 		customAvatars.log("Getting callback object.");
 		if(!customAvatars.roomView || !customAvatars.roomView.callback)
-			for(sVar in customAvatars.roomControl) { 
+			for(sVar in customAvatars.roomControl) {
 				var sObj = eval('customAvatars.roomControl.'+sVar);
 				if(sObj && sObj.callback){
 					/// We've found the callback control object and can now continue loading the custom avatars.
 					customAvatars.roomView = sObj;
 					customAvatars.log('Resolving, got controls.');
 					customAvatars.deferredControls.resolve();//customAvatars.Initialize();
-					return; 
-				} 
+					return;
+				}
 			}
 			/// We already have the callback object, so we can just start loading the custom avatars.
-		else{ 
+		else{
 			customAvatars.log('Resolving, already have controls.');
 			customAvatars.deferredControls.resolve();//customAvatars.Initialize();
 			return;
@@ -224,36 +256,45 @@ var customAvatars = {
 		customAvatars.log("Calling postLoading call backs");
 		customAvatars.PostLoading();
 		customAvatars.log("Setting up hooks.");
-		
+		util.createImageWithLoader = function (t){
+			var i=$.Deferred(),o=new Image;
+			return o.onload=function(){util.retry(null,requirejs)(o,i)},o.onerror=function(){i.reject()},o.src=t, o.crossOrigin='', o.crossOrigin='anonymous',[o,i]
+		};
+
 		///Beware yee who enter, dragons lay below here
 		///
 		///============================================
 		///
-		var oldAddDj = customAvatars.roomView.addDj.toString();
-		oldAddDj = oldAddDj.substring(oldAddDj.indexOf('{')+1, oldAddDj.length-1)
-		var laptopMatches = oldAddDj.match('([a-z]*)\\["laptop_');
-		var laptopIdentifier = laptopMatches[1];
-		var laptopMatch = laptopMatches[0];
-		var blackSwanIdentifier = oldAddDj.match('([a-z]*)\.BlackSwanDancer')[1];
-		var blackSwanInstance = blackSwanIdentifier + "=requirejs('blackswan/blackswan');";
-		customAvatars.addDj = blackSwanInstance + oldAddDj.replace(laptopMatch, laptopMatch.replace(laptopIdentifier, 'customAvatars.laptopUrls'))
-			.replace('this', 'customAvatars.roomView');
-		customAvatars.addDjStr = customAvatars.addDj;
-		customAvatars.roomView.addDj = new Function("e", "t", customAvatars.addDj);
+		/*try{
+			var oldAddDj = customAvatars.roomView.addDj.toString();
+			oldAddDj = oldAddDj.substring(oldAddDj.indexOf('{')+1, oldAddDj.length-1);
+			console.log(oldAddDj);
+			var laptopMatches = oldAddDj.match('([a-z]*)\\["laptop_');
+			var laptopIdentifier = laptopMatches[1];
+			var laptopMatch = laptopMatches[0];
+			var blackSwanIdentifier = oldAddDj.match('([a-z]*)\.BlackSwanDancer')[1];
+			var blackSwanInstance = blackSwanIdentifier + "=requirejs('blackswan/blackswan');";
+			customAvatars.addDj = blackSwanInstance + oldAddDj.replace(laptopMatch, laptopMatch.replace(laptopIdentifier, 'customAvatars.laptopUrls'))
+				.replace('this', 'customAvatars.roomView');
+			customAvatars.addDjStr = customAvatars.addDj;
+			customAvatars.roomView.addDj = new Function("e", "t", customAvatars.addDj);
+		}catch(ex){
+			console.log(ex);
+		}*/
 		///
 		///Now leaving dragon lair
 		///
 		///============================================
-		
+
 		customAvatars.HookFunction(customAvatars.roomView, ["addDj", "addListener"], function(cached, args){
 			customAvatars.log('Applying Custom', args, this == customAvatars.roomView);
 			args[0] = customAvatars.applyCustom(args[0]);
 			cached.apply(this, args);
 		});
-		
+
 		function particle(xOrigin,yOrigin){
 			//speed, life, location, life, colors
-			//speed.x range = -2.5 to 2.5 
+			//speed.x range = -2.5 to 2.5
 			//speed.y range = -2.5 to -2.5 to make it move upwards
 			//lets change the Y speed to make it look like a flame
 			this.speed = {x: Math.random()-.5, y: 1+Math.random()*.5};
@@ -276,18 +317,35 @@ var customAvatars = {
 				}, i * 400);
 		}
 
-		customAvatars.roomView.djBooth.config.extraDrawFunction = $.proxy(function(r, x) {
+		customAvatars.roomView.djRenderer.config.extraDrawFunction = $.proxy(function(r, x) {
 		  var i = this.spotlightOffset,
 			  S = this.spotlightRect;
 		  if (i) {
-			x.globalCompositeOperation = "lighter";
-			x.drawImage(this.boardSprite, S.left, S.top, S.width, S.height, i.x, i.y, S.width, S.height);
+
+			var spotlight = customAvatars.GetProperty(this.current_dj[0], "spotlight"),
+			    spotlightLoader = customAvatars.GetProperty(this.current_dj[0], "spotlightLoader");
+
+			if(spotlight === undefined ||
+			   (spotlightLoader === undefined ||
+			    spotlightLoader[1].state() !== "resolved")){
+				if(spotlight !== undefined)
+					customAvatars.SetProperty(this.current_dj[0], "spotlightLoader", util.createImageWithLoader("http://turntablecustoms.com/facesimg/spotlights/" + spotlight));
+				x.globalCompositeOperation = "lighter";
+				x.drawImage(this.boardSprite, S.left, S.top, S.width, S.height, i.x, i.y, S.width, S.height);
+			}else{
+				var targetX = i.x, targetY = i.y;
+				targetX -= 70;
+				//i.y += 70;
+				x.globalCompositeOperation = "lighter";
+				spotlight = spotlightLoader[0];
+				x.drawImage(spotlight, 0, 0, spotlight.width, spotlight.height, targetX, targetY, spotlight.width, spotlight.height);
+			}
 			if(this.current_dj[0] == "4e6498184fe7d042db021e95"){
 				if(!customAvatars.isTC){
 					customAvatars.isTC = true;
 					generateParticles();
 				}
-				for(var k = 0; k < customAvatars.spotlightParticles.length; ++k)	
+				for(var k = 0; k < customAvatars.spotlightParticles.length; ++k)
 				{
 					var p = customAvatars.spotlightParticles[k];
 					x.beginPath();
@@ -302,13 +360,13 @@ var customAvatars = {
 					x.fillStyle = gradient;
 					x.arc(p.location.x, p.location.y, p.radius, Math.PI*2, false);
 					x.fill();
-					
+
 					//lets move the particles
 					p.remaining_life--;
 					p.radius = p.origRadius + ((p.origRadius/2) * (p.remaining_life / p.life));
 					p.location.x += p.speed.x;
 					p.location.y += p.speed.y;
-					
+
 					//regenerate particles
 					if(p.remaining_life < 0 || p.radius < 0)
 					{
@@ -320,13 +378,13 @@ var customAvatars = {
 			x.globalCompositeOperation = "source-over";
 		  }
 		}, customAvatars.roomView);
-		
+
 		if(customAvatars.initialized === false){
 			customAvatars.AddButtons();
 			customAvatars.initialized = true;
 		}
 		customAvatars.ReplaceAllUsers();
-		
+
 		customAvatars.log('Unlocking and resolving');
 		var deferredLock = customAvatars.deferredLoading;
 		customAvatars.deferredLoading = null;
@@ -351,45 +409,46 @@ var customAvatars = {
 		customAvatars.log("Resetting turntable");
 		var DJs = [];
 		//var IDs = [];
-		
+
 		var mCurrentDJIndex = null;
 		//for(sVar in customAvatars.roomControl.users) IDs.push(sVar);
 		//customAvatars.LoadAvatars(IDs);
-		
+
 		var listenerIDs = Object.keys(customAvatars.roomControl.users);
 		customAvatars.log('Replacing ' + listenerIDs.length + ' users.');
 		for(var i = 0; i < listenerIDs.length; ++i){
 			var sIndexOf = customAvatars.roomControl.djids.indexOf(listenerIDs[i]);
 			var sObj = $.extend({}, customAvatars.roomControl.users[listenerIDs[i]]);
 			customAvatars.log('Currently on ' + (i+1) + ' out of ' + listenerIDs.length + ' ('+listenerIDs[i]+')');
-			if(sIndexOf == -1){
+			customAvatars.roomControl.updateUser(customAvatars.roomControl.users[listenerIDs[i]]);
+			/*if(sIndexOf == -1){
 				customAvatars.roomView.removeListener(customAvatars.roomControl.users[listenerIDs[i]]);
 				customAvatars.roomView.addListener(sObj, true);
 			}else{
 				DJs[sIndexOf] = sObj;
 				if(customAvatars.roomView.current_dj && sObj.userid == customAvatars.roomView.current_dj[0]) mCurrentDJIndex = sIndexOf;
-			}
+			}*/
 		}
-		
-		customAvatars.log('Replacing DJs');
+
+		/*customAvatars.log('Replacing DJs');
 		for(var i = 4; i >= 0; --i) customAvatars.roomView.removeDj(i);
 		for(var i = 0; i < 5; ++i) if(DJs[i]) customAvatars.roomView.addDj(DJs[i], i);
-		
+
 		customAvatars.log('Setting active DJ back');
 		if(mCurrentDJIndex !== null)
 			customAvatars.roomView.set_active_dj(mCurrentDJIndex);
-			
+
 		customAvatars.log('Resetting votes');
 		for(var i = 0; i < customAvatars.roomControl.upvoters.length; ++i){
 			var sUpvoterId = customAvatars.roomControl.upvoters[i];
 			var sUser = customAvatars.roomControl.users[sUpvoterId];
 			customAvatars.roomView.update_vote(sUser, "up", 0);
-		}
+		}*/
 	},
 	applyCustom: function(user, noLaptop){
 		if(!user.id && user.userid) user.id = user.userid;
-		if(avatars[user.id] && avatars[user.id].size)
-			user.custom_avatar = avatars[user.id];
+		if(customAvatars.app.avatars[user.id] && customAvatars.app.avatars[user.id].size)
+			user.custom_avatar = customAvatars.app.avatars[user.id];
 		if(!customAvatars.additionalProperties) return user;
 		var userLaptop = customAvatars.GetProperty(user.id, 'laptop');
 		if(userLaptop && noLaptop === undefined)
@@ -409,7 +468,7 @@ Room.prototype.loadLayout = function(){
 		customAvatars.log("!!Dom Added!!");
 		if(oldAddedToDOM)
 			oldAddedToDOM();
-		
+
 		if(customAvatars.doneLoading === true){
 			customAvatars.doneLoading = false;
 			if(customAvatars.bootStrapped !== null){
@@ -430,8 +489,23 @@ Room.prototype.loadLayout = function(){
 		customAvatars.Clobber(this);
 	}
 }
-	
-requirejs("blackswan/blackswan").BlackSwanDancer.prototype.shadeImage = function(f, b, e) {
+
+/*customAvatars.HookFunction(requirejs("blackswan/avatar-spriter"), 'shadeImage', function(cached, args){
+	console.log('shadeImage: ', args);
+	cached.apply(this, args);
+});
+
+customAvatars.PostLoading(function(){
+	customAvatars.HookFunction(customAvatars.roomView.djRenderer, "drawSprite", function(cached, args){
+		try{
+		cached.apply(this, args);
+		}catch(ex){
+			console.log("Problem with drawSprite: ", ex);
+		}
+	});
+});*/
+
+/*requirejs("blackswan/avatar-spriter").shadeImage = function(f, b, e) {
   if (!e) {
 	e = "#100911";
   }
@@ -450,16 +524,16 @@ requirejs("blackswan/blackswan").BlackSwanDancer.prototype.shadeImage = function
 	c.resolve();
   });
   return [g, c];
-}
+}*/
 
-if(customAvatars.setupProfileOverlay === null) customAvatars.setupProfileOverlay = Room.prototype.setupProfileOverlay;
+/*if(customAvatars.setupProfileOverlay === null) customAvatars.setupProfileOverlay = Room.prototype.setupProfileOverlay;
 Room.prototype.setupProfileOverlay = function(user){
 	if(user && (user.userid || user.id))
 		user = customAvatars.applyCustom(user, true);
 	return customAvatars.setupProfileOverlay.apply(this, arguments);//$.proxy(customAvatars.buildTree, util)(n,h);
-}
+}*/
 
-if(customAvatars.oldDraw === null) customAvatars.oldDraw = requirejs("blackswan/blackswan").Stage.prototype.draw;
+/*if(customAvatars.oldDraw === null) customAvatars.oldDraw = requirejs("blackswan/blackswan").Stage.prototype.draw;
 requirejs("blackswan/blackswan").Stage.prototype.draw = function(a,b,c,d,e){
 	if(c)
 		for(var i = 0; i < c.length; ++i)
@@ -490,14 +564,14 @@ requirejs("blackswan/blackswan").Stage.prototype.draw = function(a,b,c,d,e){
 			//avatarInfo.calculateBoundingBox(true);
 		}
 	customAvatars.oldDraw.apply(this, arguments);//$.proxy(customAvatars.oldDraw, this)(a,b,c,d,e);//this.old_draw(a,b,c,d,e);
-}
+}*/
 
 console.log(chrome);
 console.log(chrome.extension);
 console.log(chrome.runtime);
 if(chrome.runtime !== undefined){
 	try{
-	console.log(chrome.runtime.id);	
+	console.log(chrome.runtime.id);
 	}catch(ex){}
 }
 
