@@ -256,10 +256,6 @@ var customAvatars = {
 		customAvatars.log("Calling postLoading call backs");
 		customAvatars.PostLoading();
 		customAvatars.log("Setting up hooks.");
-		util.createImageWithLoader = function (t){
-			var i=$.Deferred(),o=new Image;
-			return o.onload=function(){util.retry(null,requirejs)(o,i)},o.onerror=function(){i.reject()},o.src=t, o.crossOrigin='', o.crossOrigin='anonymous',[o,i]
-		};
 
 		///Beware yee who enter, dragons lay below here
 		///
