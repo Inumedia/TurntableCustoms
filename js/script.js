@@ -201,6 +201,7 @@ var customAvatars = {
 		setTimeout(customAvatars.GetCallbackObject, 100);
 	},
 	BootStrap: function(){
+		DEBUG_MODE = true;
 		customAvatars.log('Attempting to bootstrap.');
 		customAvatars.bootStrapped = setTimeout(function(){
 			customAvatars.log('Ran out, relying on bootstrap.');
@@ -257,6 +258,16 @@ var customAvatars = {
 		customAvatars.PostLoading();
 		customAvatars.log("Setting up hooks.");
 
+		util.createImageWithLoader = function (t){
+			var i=$.Deferred(),o=new Image;
+			console.log(t);
+			if (t.match('http://turntablecustoms')){
+				o.crossOrigin='anonymous';
+				console.log("Cross origin!");
+			}
+			return o.onload=function(){util.retry(null,requirejs)(o,i)},o.onerror=function(){i.reject()},o.src=t,[o,i]
+		};
+		
 		///Beware yee who enter, dragons lay below here
 		///
 		///============================================
@@ -443,8 +454,10 @@ var customAvatars = {
 	},
 	applyCustom: function(user, noLaptop){
 		if(!user.id && user.userid) user.id = user.userid;
-		if(customAvatars.app.avatars[user.id] && customAvatars.app.avatars[user.id].size)
+		if(customAvatars.app.avatars[user.id] && customAvatars.app.avatars[user.id].size){
+			user.avatar
 			user.custom_avatar = customAvatars.app.avatars[user.id];
+		}
 		if(!customAvatars.additionalProperties) return user;
 		var userLaptop = customAvatars.GetProperty(user.id, 'laptop');
 		if(userLaptop && noLaptop === undefined)
